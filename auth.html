@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Авторизация</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+    input {
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      margin-bottom: 10px;
+      width: 300px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #38bdf8;
+      color: black;
+      font-weight: bold;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>Введите API ключ</h2>
+  <input id="apikey" placeholder="API_KEY" />
+  <div id="error" style="color: red; margin: 10px 0; display: none;">Неверный ключ!!! Вы заблокированы за попытку взлома приложения</div>
+<button onclick="login()">Войти</button>
+<script>
+  async function login() {
+    const key = document.getElementById('apikey').value.trim();
+    if (!key) {
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = 'Введите API ключ';
+      return;
+    }
+    
+    const res = await window.electron.invoke('auth:login', key);
+    
+    if (!res.ok) {
+      document.getElementById('error').style.display = 'block';
+      // Use server message if available
+      document.getElementById('error').textContent = res.message || 'Неверный API ключ';
+    } else {
+      // Store balance in localStorage if available
+      if (res.balance) {
+        localStorage.setItem('userBalance', res.balance.toFixed(2));
+      }
+    }
+  }
+
+  // Нажатие Enter в поле ввода
+  document.getElementById('apikey').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') login();
+  });
+</script>
+</body>
+</html>
