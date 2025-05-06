@@ -27,12 +27,10 @@ window.addEventListener('DOMContentLoaded', () => {
   `;
   document.head.appendChild(style);
 
-  // слухаємо задачу капчі
-  ipcRenderer.on('captcha:task', (_event, task) => {
-    console.log("📩 Получено задание на капчу:", task);
+  ipcRenderer.on('task', (_event, task) => {
+    console.log("📩 Получено задание:", task);
 
     try {
-      // очистка старої капчі
       const old = document.getElementById("captcha-wrapper");
       if (old) old.remove();
 
@@ -63,24 +61,23 @@ window.addEventListener('DOMContentLoaded', () => {
       script.onerror = () => console.error("❌ Не удалось загрузить капчу");
       document.body.appendChild(script);
 
-      // глобальний callback reCAPTCHA
+      // глобальна функція виклику після вирішення капчі
       window.onCaptchaSolved = function(token) {
         console.log("✅ Капча решена:", token);
 
-        // відправка вирішення в main процес
         ipcRenderer.send('captcha:solved', {
           token,
           url: task.url,
-          type: task.kind
+          type: task.type
         });
 
-        // очищення з інтерфейсу
+        // прибираємо UI
         const wrap = document.getElementById("captcha-wrapper");
         if (wrap) wrap.remove();
       };
 
     } catch (e) {
-      console.error("❌ Ошибка при обработке капчи:", e);
+      console.error("❌ Ошибка при вставке капчи:", e);
     }
   });
 });

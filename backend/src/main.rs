@@ -45,7 +45,7 @@ async fn run_auth_mode() {
     let stdin = io::stdin();
     let mut lines = BufReader::new(stdin).lines();
 
-    let Some(Ok(line)) = lines.next_line().await else {
+    let Ok(Some(line)) = lines.next_line().await else {
         eprintln!("❌ Не удалось прочитать ключ");
         std::process::exit(1);
     };
@@ -73,12 +73,11 @@ async fn run_auth_mode() {
 }
 
 async fn run_task_mode() {
-    eprintln!("📦 Основной режим");
     let stdin = io::stdin();
     let mut lines = BufReader::new(stdin).lines();
 
     eprintln!("⏳ Ожидаем API ключ...");
-    let Some(Ok(line)) = lines.next_line().await else {
+    let Ok(Some(line)) = lines.next_line().await else {
         eprintln!("❌ Не удалось прочитать API ключ");
         return;
     };
@@ -88,7 +87,6 @@ async fn run_task_mode() {
         return;
     };
 
-    // Подключение к WebSocket
     eprintln!("🌐 Подключение к WebSocket...");
     let (ws_stream, _) = match connect_async("ws://127.0.0.1:8080/socket").await {
         Ok(pair) => pair,
@@ -98,11 +96,8 @@ async fn run_task_mode() {
         }
     };
 
-    eprintln!("✅ WebSocket подключен");
-
     let (mut write, mut read) = ws_stream.split();
 
-    // Отправка API ключа
     let Ok(auth_json) = serde_json::to_string(&auth) else {
         eprintln!("❌ Ошибка сериализации ключа");
         return;
@@ -113,51 +108,60 @@ async fn run_task_mode() {
         return;
     }
 
-    eprintln!("📤 Ключ отправлен. Ожидаем задачу...");
-
-    // Ожидаем задачу
-    while let Some(msg) = read.next().await {
-        let Ok(msg) = msg else {
+    loop {
+        eprintln!("📥 Ожидаем задачу...");
+        let msg = read.next().await;
+        let Some(Ok(msg)) = msg else {
             eprintln!("❌ Ошибка чтения WebSocket");
             break;
         };
 
-        if msg.is_text() {
-            let Ok(task): Result<Task, _> = serde_json::from_str(&msg.to_text().unwrap_or("")) else {
-                eprintln!("❌ Неверный формат задачи");
-                continue;
-            };
+        if !msg.is_text() {
+            continue;
+        }
 
-            // Отправляем в stdout
-            println!("{}", serde_json::to_string(&task).unwrap());
-            eprintln!("✅ Задача отправлена в stdout. Ожидаем решение...");
-
-            // Читаем решение из stdin
-            let Some(Ok(line)) = lines.next_line().await else {
-                eprintln!("❌ Не получено решение из stdin");
-                break;
-            };
-
-            let Ok(solution): Result<CaptchaSolution, _> = serde_json::from_str(&line) else {
-                eprintln!("❌ Неверный JSON в решении");
-                break;
-            };
-
-            let Ok(solution_json) = serde_json::to_string(&solution) else {
-                eprintln!("❌ Не удалось сериализовать решение");
-                break;
-            };
-
-            // Отправка решения обратно в WebSocket
-            if let Err(e) = write.send(solution_json.into()).await {
-                eprintln!("❌ Не удалось отправить решение: {e}");
-                break;
-            }
-
-            eprintln!("📤 Решение отправлено. Завершение...");
+        let text = msg.to_text().unwrap_or("");
+        if text.contains("\"status\":\"no_tasks\"") {
+            eprintln!("😴 Нет задач");
+            println!("{{\"status\":\"no_tasks\"}}");
             break;
         }
+
+        let Ok(task): Result<Task, _> = serde_json::from_str(text) else {
+            eprintln!("❌ Невалидная задача");
+            continue;
+        };
+
+        println!("{}", serde_json::to_string(&task).unwrap());
+        eprintln!("✅ Задача отправлена. Ожидание решения...");
+
+        let Ok(Some(line)) = lines.next_line().await else {
+            eprintln!("❌ Stdin закрыт");
+            break;
+        };
+
+        if line.trim().is_empty() {
+            eprintln!("🔁 Получен сигнал на следующую задачу");
+            continue;
+        }
+
+        let Ok(solution): Result<CaptchaSolution, _> = serde_json::from_str(&line) else {
+            eprintln!("❌ Невалидный JSON решения");
+            break;
+        };
+
+        let Ok(solution_json) = serde_json::to_string(&solution) else {
+            eprintln!("❌ Ошибка сериализации решения");
+            break;
+        };
+
+        if let Err(e) = write.send(solution_json.into()).await {
+            eprintln!("❌ Ошибка отправки решения: {e}");
+            break;
+        }
+
+        eprintln!("📤 Решение отправлено. Ожидаем запрос на следующую задачу...");
     }
 
-    eprintln!("👋 Rust CLI завершает работу");
+    eprintln!("👋 Завершение CLI");
 }
