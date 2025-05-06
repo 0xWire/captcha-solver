@@ -1,6 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Прокидываем ipc методы в window.electron
 contextBridge.exposeInMainWorld('electron', {
   invoke: ipcRenderer.invoke,
   send: ipcRenderer.send,
@@ -12,29 +11,31 @@ contextBridge.exposeInMainWorld('electron', {
 
 console.log("👀 Preload script загружен");
 
-// Add CSS to hide scrollbars
 window.addEventListener('DOMContentLoaded', () => {
   console.log("📦 DOM готов");
-  
-  // Add CSS to hide scrollbars
+
   const style = document.createElement('style');
   style.textContent = `
     ::-webkit-scrollbar {
       display: none;
     }
-    
     body {
-      -ms-overflow-style: none;  /* IE and Edge */
-      scrollbar-width: none;  /* Firefox */
+      -ms-overflow-style: none;
+      scrollbar-width: none;
       overflow: hidden;
     }
   `;
   document.head.appendChild(style);
 
-  ipcRenderer.on('task', (event, task) => {
-    console.log("📩 Получено задание:", task);
+  // слухаємо задачу капчі
+  ipcRenderer.on('captcha:task', (_event, task) => {
+    console.log("📩 Получено задание на капчу:", task);
 
     try {
+      // очистка старої капчі
+      const old = document.getElementById("captcha-wrapper");
+      if (old) old.remove();
+
       const wrapper = document.createElement('div');
       wrapper.id = "captcha-wrapper";
       wrapper.style = `
@@ -62,17 +63,24 @@ window.addEventListener('DOMContentLoaded', () => {
       script.onerror = () => console.error("❌ Не удалось загрузить капчу");
       document.body.appendChild(script);
 
+      // глобальний callback reCAPTCHA
       window.onCaptchaSolved = function(token) {
         console.log("✅ Капча решена:", token);
-        fetch('http://127.0.0.1:8080/captcha_token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, url: task.url, type: task.type })
-        }).catch(err => console.error("❌ Ошибка отправки токена:", err));
+
+        // відправка вирішення в main процес
+        ipcRenderer.send('captcha:solved', {
+          token,
+          url: task.url,
+          type: task.kind
+        });
+
+        // очищення з інтерфейсу
+        const wrap = document.getElementById("captcha-wrapper");
+        if (wrap) wrap.remove();
       };
 
     } catch (e) {
-      console.error("❌ Ошибка при вставке капчи:", e);
+      console.error("❌ Ошибка при обработке капчи:", e);
     }
   });
 });
