@@ -1,0 +1,54 @@
+{
+  "name": "captcha-secure-client",
+  "version": "1.0.0",
+  "description": "Electron + Rust приложение для решения капч с авторизацией",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "author": "Ты",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.2"
+  },
+  "build": {
+    "appId": "com.captcha.secureclient",
+    "productName": "CaptchaSecureClient",
+    "files": [
+      "main.js",
+      "preload.js",
+      "auth.html",
+      "menu.html",
+      "dist/captcha_cli",
+      "dist/assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/captcha_cli",
+        "to": "captcha_cli"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "target": "dir",
+      "category": "Utility"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
+

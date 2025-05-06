@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Меню</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    button {
+      margin: 10px;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      background: #38bdf8;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Главное меню</h1>
+  <div id="balance">Баланс: Загрузка...</div>
+  <button onclick="solve()">Решать капчи</button>
+
+  <script>
+    window.onload = async () => {
+      const response = await window.electron.getBalance();
+      if (response.ok) {
+        document.getElementById('balance').innerText = `Баланс: ${response.balance}`;
+      } else {
+        document.getElementById('balance').innerText = 'Ошибка загрузки баланса';
+      }
+    }
+
+    function solve() {
+      window.electron.send('menu:solve');
+    }
+  </script>
+</body>
+</html>
