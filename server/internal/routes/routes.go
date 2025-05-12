@@ -19,7 +19,8 @@ func SetupRoutes(app *fiber.App) {
 	// Add websocket route with auth check
 	app.Get("/socket", websocket.New(handlers.HandleWebSocket))
 
-	//app.Post("/auth", handlers.HandleSimpleAuth)
+	// Auth endpoint for worker client
+	app.Post("/auth", handlers.HandleSimpleAuth)
 
 	// API routes (with API authentication middleware)
 	app.Post("/api/task", middleware.ApiAuthMiddleware, handlers.CreateTask)

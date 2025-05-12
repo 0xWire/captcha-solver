@@ -6,7 +6,6 @@ import (
 	"captcha-solver/internal/models"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 	"log"
@@ -29,20 +28,50 @@ func HandleWebSocket(c *websocket.Conn) {
 	var auth middleware.AuthRequest
 	if err := json.Unmarshal(msg, &auth); err != nil {
 		log.Println("❌ Некорректный JSON в WebSocket")
+		if err := c.WriteJSON(map[string]string{
+			"status": "error",
+			"message": "Invalid JSON format",
+		}); err != nil {
+			log.Println("Error sending error message:", err)
+		}
 		return
 	}
 	log.Printf("📥 WebSocket AUTH DECODED: %+v", auth)
 
 	// Authenticate worker by API key
 	var user models.User
-	err = config.DB.QueryRow("SELECT id, username, role FROM users WHERE api_key = ? AND (role = 'worker' OR role = 'admin')", auth.ApiKey).
-		Scan(&user.ID, &user.Username, &user.Role)
+	err = config.DB.QueryRow("SELECT id, username, role, balance FROM users WHERE api_key = ?", auth.ApiKey).
+		Scan(&user.ID, &user.Username, &user.Role, &user.Balance)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Println("❌ Неверный API ключ через WebSocket:", auth.ApiKey)
+			if err := c.WriteJSON(map[string]string{
+				"status": "error",
+				"message": "Invalid API key",
+			}); err != nil {
+				log.Println("Error sending error message:", err)
+			}
 		} else {
 			log.Println("❌ Ошибка проверки API ключа:", err)
+			if err := c.WriteJSON(map[string]string{
+				"status": "error",
+				"message": "Server error during authentication",
+			}); err != nil {
+				log.Println("Error sending error message:", err)
+			}
+		}
+		return
+	}
+
+	// Check if user has appropriate role
+	if user.Role != "worker" && user.Role != "admin" {
+		log.Printf("❌ Пользователь %s имеет недопустимую роль: %s", user.Username, user.Role)
+		if err := c.WriteJSON(map[string]string{
+			"status": "error",
+			"message": "Only workers and admins can connect via WebSocket",
+		}); err != nil {
+			log.Println("Error sending error message:", err)
 		}
 		return
 	}
@@ -50,7 +79,12 @@ func HandleWebSocket(c *websocket.Conn) {
 	log.Printf("✅ WebSocket авторизован для пользователя %s (ID: %d, роль: %s)\n", user.Username, user.ID, user.Role)
 
 	// Send authentication success message
-	authSuccessMsg := map[string]string{"status": "ok", "balance": fmt.Sprintf("%.2f", user.Balance), "username": user.Username}
+	authSuccessMsg := map[string]interface{}{
+		"status": "ok",
+		"balance": user.Balance,
+		"username": user.Username,
+		"role": user.Role,
+	}
 	if err := c.WriteJSON(authSuccessMsg); err != nil {
 		log.Println("Error sending auth success message:", err)
 		return
@@ -192,7 +226,10 @@ func fetchAndSendTask(c *websocket.Conn, user models.User) {
 func HandleSimpleAuth(c *fiber.Ctx) error {
 	var req middleware.AuthRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"status": "bad_request"})
+		return c.Status(400).JSON(fiber.Map{
+			"status": "error",
+			"message": "Invalid request format",
+		})
 	}
 
 	// Log the authentication request
@@ -200,27 +237,43 @@ func HandleSimpleAuth(c *fiber.Ctx) error {
 
 	// Check API key in database
 	var user models.User
-	err := config.DB.QueryRow("SELECT id, username, balance FROM users WHERE api_key = ?", req.ApiKey).
-		Scan(&user.ID, &user.Username, &user.Balance)
+	err := config.DB.QueryRow("SELECT id, username, role, balance FROM users WHERE api_key = ?", req.ApiKey).
+		Scan(&user.ID, &user.Username, &user.Role, &user.Balance)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Println("🔐 Неудачная авторизация с API ключом:", req.ApiKey)
-			return c.Status(401).JSON(fiber.Map{"status": "unauthorized"})
+			return c.Status(401).JSON(fiber.Map{
+				"status": "error",
+				"message": "Invalid API key",
+			})
 		}
 		log.Println("DB error during API auth:", err)
-		return c.Status(500).JSON(fiber.Map{"status": "server_error"})
+		return c.Status(500).JSON(fiber.Map{
+			"status": "error",
+			"message": "Server error during authentication",
+		})
+	}
+
+	// Check if user has appropriate role
+	if user.Role != "worker" && user.Role != "client" && user.Role != "admin" {
+		log.Printf("🔐 Пользователь %s имеет недопустимую роль: %s", user.Username, user.Role)
+		return c.Status(403).JSON(fiber.Map{
+			"status": "error",
+			"message": "User role not allowed",
+		})
 	}
 
 	response := fiber.Map{
 		"status":   "ok",
 		"balance":  user.Balance,
 		"username": user.Username,
+		"role":     user.Role,
 	}
 
 	// Log the response
 	log.Printf("📤 API AUTH RESPONSE: %+v", response)
-	log.Printf("🔐 Успешная авторизация от: %s (ID: %d)", user.Username, user.ID)
+	log.Printf("🔐 Успешная авторизация от: %s (ID: %d, роль: %s)", user.Username, user.ID, user.Role)
 
 	return c.JSON(response)
 }

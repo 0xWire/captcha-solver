@@ -67,19 +67,37 @@ async fn run_auth_mode() {
         return;
     };
 
-    let client = reqwest::Client::new();
-    match client.post("http://127.0.0.1:8080/auth").json(&auth).send().await {
-        Ok(res) => {
-            if res.status().is_success() {
-                let json_val: serde_json::Value = res.json().await.unwrap_or_else(|_| json!({ "status": "error", "message": "bad_response" }));
-                println!("{}", json_val);
-            } else {
-                println!("{}", json!({ "status": "error", "message": format!("HTTP {}", res.status()) }));
-            }
-        }
+    eprintln!("🌐 Подключение к WebSocket...");
+    let (ws_stream, _) = match connect_async("ws://127.0.0.1:8080/socket").await {
+        Ok(pair) => pair,
         Err(e) => {
-            println!("{}", json!({ "status": "error", "message": format!("network error: {}", e) }));
+            println!("{}", json!({ "status": "error", "message": format!("connection error: {}", e) }));
+            return;
         }
+    };
+
+    let (mut write, mut read) = ws_stream.split();
+
+    // Отправка API ключа
+    let Ok(auth_json) = serde_json::to_string(&auth) else {
+        println!("{}", json!({ "status": "error", "message": "serialization error" }));
+        return;
+    };
+
+    if let Err(e) = write.send(auth_json.into()).await {
+        println!("{}", json!({ "status": "error", "message": format!("send error: {}", e) }));
+        return;
+    }
+
+    // Ждем ответ от сервера
+    if let Some(Ok(msg)) = read.next().await {
+        if msg.is_text() {
+            println!("{}", msg.to_text().unwrap_or(""));
+        } else {
+            println!("{}", json!({ "status": "error", "message": "invalid response format" }));
+        }
+    } else {
+        println!("{}", json!({ "status": "error", "message": "no response from server" }));
     }
 }
 
@@ -124,6 +142,34 @@ async fn run_task_mode() {
         return;
     }
 
+    // Ждем ответ авторизации
+    let auth_response = match read.next().await {
+        Some(Ok(msg)) if msg.is_text() => {
+            let text = msg.to_text().unwrap_or("").to_string();
+            text
+        },
+        _ => {
+            eprintln!("❌ Не получен ответ авторизации");
+            return;
+        }
+    };
+
+    // Проверяем успешность авторизации
+    let auth_result: serde_json::Value = match serde_json::from_str(&auth_response) {
+        Ok(val) => val,
+        Err(_) => {
+            eprintln!("❌ Ошибка парсинга ответа авторизации");
+            return;
+        }
+    };
+
+    if auth_result.get("status") != Some(&json!("ok")) {
+        eprintln!("❌ Ошибка авторизации: {}", auth_result.get("message").unwrap_or(&json!("unknown error")));
+        return;
+    }
+
+    eprintln!("✅ Авторизация успешна");
+
     loop {
         let Ok(Some(line)) = lines.next_line().await else {
             eprintln!("🔚 Stdin закрыт");
@@ -136,8 +182,8 @@ async fn run_task_mode() {
 
         let parsed: serde_json::Value = match serde_json::from_str(&line) {
             Ok(val) => val,
-            Err(_) => {
-                eprintln!("⚠️ Невалидный JSON: {}", line);
+            Err(e) => {
+                eprintln!("⚠️ Невалидный JSON: {} ({})", line, e);
                 continue;
             }
         };
@@ -150,9 +196,33 @@ async fn run_task_mode() {
             }
 
             // ждем ответ
-            if let Some(Ok(msg)) = read.next().await {
-                if msg.is_text() {
-                    println!("{}", msg.to_text().unwrap_or(""));
+            match read.next().await {
+                Some(Ok(msg)) if msg.is_text() => {
+                    let response = msg.to_text().unwrap_or("");
+                    if !response.is_empty() {
+                        // Проверка валидности JSON перед выводом
+                        if let Ok(_) = serde_json::from_str::<serde_json::Value>(response) {
+                            println!("{}", response);
+                        } else {
+                            eprintln!("⚠️ Получен невалидный JSON от сервера");
+                            println!("{}", json!({
+                                "status": "error",
+                                "message": "invalid_server_response"
+                            }));
+                        }
+                    } else {
+                        println!("{}", json!({
+                            "status": "error",
+                            "message": "empty_response"
+                        }));
+                    }
+                },
+                _ => {
+                    eprintln!("⚠️ Не получен ответ на запрос задачи");
+                    println!("{}", json!({
+                        "status": "error",
+                        "message": "no_response"
+                    }));
                 }
             }
 
@@ -163,9 +233,33 @@ async fn run_task_mode() {
             }
 
             // ответ о сохранении решения
-            if let Some(Ok(msg)) = read.next().await {
-                if msg.is_text() {
-                    println!("{}", msg.to_text().unwrap_or(""));
+            match read.next().await {
+                Some(Ok(msg)) if msg.is_text() => {
+                    let response = msg.to_text().unwrap_or("");
+                    if !response.is_empty() {
+                        // Проверка валидности JSON перед выводом
+                        if let Ok(_) = serde_json::from_str::<serde_json::Value>(response) {
+                            println!("{}", response);
+                        } else {
+                            eprintln!("⚠️ Получен невалидный JSON от сервера при сохранении");
+                            println!("{}", json!({
+                                "status": "error",
+                                "message": "invalid_server_response"
+                            }));
+                        }
+                    } else {
+                        println!("{}", json!({
+                            "status": "error",
+                            "message": "empty_response"
+                        }));
+                    }
+                },
+                _ => {
+                    eprintln!("⚠️ Не получен ответ на отправку решения");
+                    println!("{}", json!({
+                        "status": "error",
+                        "message": "no_response"
+                    }));
                 }
             }
 

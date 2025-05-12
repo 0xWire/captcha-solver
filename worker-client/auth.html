@@ -36,34 +36,33 @@
   <h2>Введите API ключ</h2>
   <input id="apikey" placeholder="API_KEY" />
   <div id="error" style="color: red; margin: 10px 0; display: none;">Неверный ключ!!! Вы заблокированы за попытку взлома приложения</div>
-<button onclick="login()">Войти</button>
-<script>
-  async function login() {
-    const key = document.getElementById('apikey').value.trim();
-    if (!key) {
-      document.getElementById('error').style.display = 'block';
-      document.getElementById('error').textContent = 'Введите API ключ';
-      return;
-    }
-    
-    const res = await window.electron.invoke('auth:login', key);
-    
-    if (!res.ok) {
-      document.getElementById('error').style.display = 'block';
-      // Use server message if available
-      document.getElementById('error').textContent = res.message || 'Неверный API ключ';
-    } else {
-      // Store balance in localStorage if available
-      if (res.balance) {
-        localStorage.setItem('userBalance', res.balance.toFixed(2));
+  <button onclick="login()">Войти</button>
+  <script>
+    async function login() {
+      const key = document.getElementById('apikey').value.trim();
+      if (!key) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Введите API ключ';
+        return;
+      }
+      
+      const res = await window.electron.invoke('auth:login', key);
+      
+      if (!res.ok) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Неверный API ключ';
+      } else {
+        // Store balance in localStorage if available
+        if (res.balance) {
+          localStorage.setItem('userBalance', res.balance.toFixed(2));
+        }
       }
     }
-  }
 
-  // Нажатие Enter в поле ввода
-  document.getElementById('apikey').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') login();
-  });
-</script>
+    // Нажатие Enter в поле ввода
+    document.getElementById('apikey').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') login();
+    });
+  </script>
 </body>
 </html>

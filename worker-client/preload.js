@@ -1,12 +1,23 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
-  invoke: ipcRenderer.invoke,
-  send: ipcRenderer.send,
-  on: (channel, callback) => {
-    ipcRenderer.on(channel, (event, ...args) => callback(...args));
+  invoke: (channel, data) => {
+    const validChannels = ['captcha-solved', 'auth:login'];
+    if (validChannels.includes(channel)) {
+      return ipcRenderer.invoke(channel, data);
+    }
   },
-  getBalance: () => ipcRenderer.invoke('get:balance')
+  send: (channel, data) => {
+    const validChannels = ['menu:solve', 'captcha:solved', 'submit-solution'];
+    if (validChannels.includes(channel)) {
+      ipcRenderer.send(channel, data);
+    }
+  },
+  getBalance: () => ipcRenderer.invoke('get:balance'),
+  // Add developer tools log helper
+  debug: (message) => {
+    console.log(`[DEBUG]: ${message}`);
+  }
 });
 
 console.log("👀 Preload script загружен");
@@ -27,13 +38,10 @@ window.addEventListener('DOMContentLoaded', () => {
   `;
   document.head.appendChild(style);
 
-  ipcRenderer.on('task', (_event, task) => {
+  ipcRenderer.on('task', (event, task) => {
     console.log("📩 Получено задание:", task);
 
     try {
-      const old = document.getElementById("captcha-wrapper");
-      if (old) old.remove();
-
       const wrapper = document.createElement('div');
       wrapper.id = "captcha-wrapper";
       wrapper.style = `
@@ -68,7 +76,8 @@ window.addEventListener('DOMContentLoaded', () => {
         ipcRenderer.send('captcha:solved', {
           token,
           url: task.url,
-          type: task.type
+          type: task.type,
+          task_id: task.task_id
         });
 
         // прибираємо UI

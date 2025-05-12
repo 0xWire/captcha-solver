@@ -3,3 +3,6 @@
 /backend/target/
 /captcha_cli
 /.idea
+/mix
+mix/
+/mix/
