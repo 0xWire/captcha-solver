@@ -50,8 +50,7 @@
     
     if (!res.ok) {
       document.getElementById('error').style.display = 'block';
-      // Use server message if available
-      document.getElementById('error').textContent = res.message || 'Неверный API ключ';
+      document.getElementById('error').textContent = 'Неверный API ключ';
     } else {
       // Store balance in localStorage if available
       if (res.balance) {

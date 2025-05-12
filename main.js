@@ -1,13 +1,10 @@
 const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
-const readline = require('readline');
+const axios = require('axios');
 
 let mainWin;
-let apiKey = null;
-let captchaWin = null;
-let rustProcess = null;
-let rustStdin = null;
+let apiKey = null; // Store API key
 
 function createWindow(htmlFile) {
   mainWin = new BrowserWindow({
@@ -26,164 +23,108 @@ function createWindow(htmlFile) {
   mainWin.once('ready-to-show', () => mainWin.show());
 }
 
+// 🚀 Запускаем с окна авторизации
 app.whenReady().then(() => {
   createWindow('auth.html');
 });
 
-ipcMain.handle('auth:login', async (_event, inputKey) => {
-  const rustPath = path.join(process.resourcesPath || '.', 'captcha_cli');
-  const rust = spawn(rustPath, ['auth']);
+ipcMain.handle('auth:login', async (_event, apiKey) => {
+  console.log("🔐 Получен ключ:", apiKey);
 
-  rust.stdin.write(JSON.stringify({ api_key: inputKey }) + '\n');
-  rust.stdin.end();
+  // Отправляем на Go-сервер (localhost)
+  try {
+    const res = await axios.post('https://x0x.tech/auth', { api_key: apiKey });
+    if (res.data.status === "ok") {
+      console.log("✅ Авторизация успешна");
+      
+      // Store API key for later use
+      global.apiKey = apiKey;
 
-  return new Promise((resolve) => {
-    let output = '';
-
-    rust.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    rust.stderr.setEncoding('utf-8');
-    rust.stderr.on('data', (data) => {
-      console.error("RUST STDERR:", data);
-    });
-
-    rust.on('close', () => {
-      try {
-        const response = JSON.parse(output.trim());
-        if (response.status === 'ok') {
-          apiKey = inputKey;
-          mainWin.loadFile('menu.html');
-          resolve({ ok: true, balance: response.balance || 0 });
-        } else {
-          resolve({ ok: false, message: response.message || 'Invalid key' });
-        }
-      } catch (e) {
-        resolve({ ok: false, message: `Bad response from Rust. Error: ${e}` });
-      }
-    });
-  });
-});
-
-ipcMain.handle('get:balance', async () => {
-  return { ok: true, balance: 0 };
-});
-
-ipcMain.on('menu:solve', () => {
-  if (!rustProcess) {
-    startRustSolver();
-  } else {
-    requestNewTask();
+      // Переход в главное меню
+      mainWin.loadFile('menu.html');
+      return { ok: true, balance: res.data.balance || 123.45 };
+    } else {
+      console.log("❌ Неверный ключ");
+      return { ok: false };
+    }
+  } catch (err) {
+    console.error("⚠️ Ошибка запроса:", err);
+    return { ok: false };
   }
 });
 
-function startRustSolver() {
-  if (!apiKey) {
+ipcMain.on('menu:solve', () => {
+  runCaptchaSolver();
+});
+
+function runCaptchaSolver() {
+  // Check if we have API key
+  if (!global.apiKey) {
     console.error("❌ API ключ не найден!");
     return;
   }
 
+  console.log("🚀 Запуск решателя капчи...");
+  
   const rustPath = path.join(process.resourcesPath || '.', 'captcha_cli');
-  rustProcess = spawn(rustPath);
-  rustStdin = rustProcess.stdin;
+  console.log(`📂 Путь к исполняемому файлу: ${rustPath}`);
+  
+  const rust = spawn(rustPath);
+  
+  // Create API key payload
+  const authPayload = JSON.stringify({ api_key: global.apiKey });
+  
+  // Write to stdin - this is what the Rust process is waiting for
+  rust.stdin.write(authPayload + '\n');
+  rust.stdin.end();
+  
+  console.log(`✅ API ключ отправлен в Rust процесс`);
 
-  const rl = readline.createInterface({ input: rustProcess.stdout });
-
-  rustStdin.write(JSON.stringify({ api_key: apiKey }) + '\n');
-  setTimeout(() => requestNewTask(), 300); // делаем первую команду позже
-
-  rl.on('line', (line) => {
+  rust.stdout.on('data', (data) => {
     try {
-      const parsed = JSON.parse(line.trim());
-
-      if (parsed.status && parsed.status !== 'ok' && parsed.status !== 'solution_saved') {
-        console.log("ℹ️ Ответ не является задачей, пропускаем", parsed);
-        return;
-      }
-
-      if (!parsed.url || !parsed.sitekey) {
-        console.log("ℹ️ Не задача, пропускаем", parsed);
-        return;
-      }
-
-      const task = parsed;
+      const task = JSON.parse(data.toString().trim());
       console.log("📦 Получено задание:", task);
 
-      if (!captchaWin) {
-        captchaWin = new BrowserWindow({
-          width: 1000,
-          height: 800,
-          show: false,
-          frame: false,
-          transparent: true,
-          autoHideMenuBar: true,
-          webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
-            contextIsolation: true,
-            nodeIntegration: false
-          }
-        });
+      // Загружаем страницу с капчей
+      const captchaWin = new BrowserWindow({
+        width: 1000,
+        height: 800,
+        show: false,
+        webPreferences: {
+          preload: path.join(__dirname, 'preload.js'),
+          contextIsolation: true,
+          devTools: true
+        }
+      });
 
-        captchaWin.once('ready-to-show', () => captchaWin.show());
-
-        captchaWin.webContents.on('will-navigate', e => e.preventDefault());
-        session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-          const headers = details.responseHeaders;
-          delete headers['content-security-policy'];
-          delete headers['content-security-policy-report-only'];
-          callback({ responseHeaders: headers });
-        });
-      }
+      // Удаляем CSP
+      session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        const headers = details.responseHeaders;
+        delete headers['content-security-policy'];
+        delete headers['content-security-policy-report-only'];
+        callback({ responseHeaders: headers });
+      });
 
       captchaWin.loadURL(task.url);
       captchaWin.webContents.once('did-finish-load', () => {
-        captchaWin.webContents.executeJavaScript(`
-          document.body.innerHTML = '';
-          document.body.style.background = '#0f172a';
-        `).then(() => {
-          captchaWin.webContents.send('task', task);
-        });
+        captchaWin.webContents.send('task', task);
+        captchaWin.show();
       });
-
     } catch (e) {
-      console.error("❌ Ошибка парсинга задания:", e);
+      console.error("❌ Ошибка парсинга от Rust:", e);
     }
   });
 
-  rustProcess.stderr.setEncoding('utf-8');
-  rustProcess.stderr.on('data', (data) => {
-    console.error("RUST STDERR:", data);
+  rust.stderr.on('data', (data) => {
+    console.error("RUST STDERR:", data.toString());
   });
 
-  rustProcess.on('exit', (code) => {
+  rust.on('exit', (code) => {
     console.log(`Rust завершён с кодом ${code}`);
-    rustProcess = null;
-    rustStdin = null;
+  });
+  
+  rust.on('error', (err) => {
+    console.error("❌ Ошибка запуска Rust процесса:", err);
   });
 }
 
-ipcMain.on('captcha:solved', (_event, solution) => {
-  if (!rustStdin || !rustStdin.writable) {
-    console.error("❌ Rust stdin не доступен");
-    return;
-  }
-
-  console.log("📤 Отправка решения в Rust:", solution);
-  rustStdin.write(JSON.stringify({
-    ...solution,
-    command: "submit_solution"
-  }) + '\n');
-
-  setTimeout(() => {
-    requestNewTask();
-  }, 500);
-});
-
-function requestNewTask() {
-  if (rustStdin && rustStdin.writable) {
-    rustStdin.write(JSON.stringify({ command: "get_task" }) + '\n');
-  } else {
-    console.warn("⚠️ Rust stdin не активен, не могу запросить задачу");
-  }
-}

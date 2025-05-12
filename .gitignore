@@ -1,5 +1,64 @@
-/node_modules/
-/dist/
-/backend/target/
-/captcha_cli
-/.idea
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.npm
+.yarn-integrity
+dist/
+build/
+*.tsbuildinfo
+
+# Go
+/vendor/
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# IDE - JetBrains (RustRover/GoLand/WebStorm/etc)
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Project specific
+dist-electron/
+out/
+release/
+backend/target
+captcha_cli
