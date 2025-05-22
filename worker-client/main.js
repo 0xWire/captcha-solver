@@ -134,7 +134,7 @@ app.whenReady().then(() => {
 ipcMain.handle('auth:login', async (_event, apiKey) => {
   console.log("🔐 Получен ключ:", apiKey);
 
-  const rustPath = path.join(process.resourcesPath || '.', 'captcha_cli');
+  const rustPath = path.join(__dirname, 'backend', 'target', 'debug', 'captcha_cli');
   const rust = spawn(rustPath, ['auth']);
 
   return new Promise((resolve) => {
@@ -173,7 +173,7 @@ ipcMain.handle('get:balance', async () => {
     return { ok: false };
   }
 
-  const rustPath = path.join(process.resourcesPath || '.', 'captcha_cli');
+  const rustPath = path.join(__dirname, 'backend', 'target', 'debug', 'captcha_cli');
   const rust = spawn(rustPath, ['auth']);
 
   return new Promise((resolve) => {
@@ -221,7 +221,7 @@ function startRustSolver() {
 
   console.log("🚀 Запуск решателя капчи...");
   
-  const rustPath = path.join(process.resourcesPath || '.', 'captcha_cli');
+  const rustPath = path.join(__dirname, 'backend', 'target', 'debug', 'captcha_cli');
   console.log(`📂 Путь к исполняемому файлу: ${rustPath}`);
   
   rustProcess = spawn(rustPath);

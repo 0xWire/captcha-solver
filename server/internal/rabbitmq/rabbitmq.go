@@ -5,6 +5,7 @@ import (
 	"captcha-solver/internal/models"
 	"encoding/json"
 	"log"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -15,7 +16,7 @@ var (
 )
 
 func RabbitMQConnect() {
-    RabbitMQConn, err = amqp.Dial("amqp://guest:guest@localhost:5672/")
+	RabbitMQConn, err = amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
@@ -59,9 +60,9 @@ func ConsumeTasks() {
 		}
 		// Вставляем или обновляем задачу в БД
 		_, err := config.DB.Exec(`INSERT OR REPLACE INTO tasks 
-			(id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response) 
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			task.ID, task.UserID, task.SolverID, task.CaptchaType, task.SiteKey, task.TargetURL, task.CaptchaResponse)
+			(id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response, created_at) 
+			VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')) )`,
+			task.ID, task.UserID, task.SolverID, task.CaptchaType, task.SiteKey, task.TargetURL, task.CaptchaResponse, task.CreatedAt)
 		if err != nil {
 			log.Println("Ошибка вставки задачи в БД:", err)
 		}

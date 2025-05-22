@@ -4,6 +4,7 @@ import (
 	"captcha-solver/internal/data"
 	"captcha-solver/internal/handlers"
 	"captcha-solver/internal/middleware"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 )
@@ -22,12 +23,6 @@ func SetupRoutes(app *fiber.App) {
 	// Auth endpoint for worker client
 	app.Post("/auth", handlers.HandleSimpleAuth)
 
-	// API routes (with API authentication middleware)
-	app.Post("/api/task", middleware.ApiAuthMiddleware, handlers.CreateTask)
-	app.Get("/api/tasks", middleware.ApiAuthMiddleware, handlers.GetTasks)
-	app.Get("/api/task/:id", middleware.ApiAuthMiddleware, handlers.GetTask)
-	app.Post("/api/solution", middleware.ApiAuthMiddleware, handlers.SubmitCaptchaSolution)
-
 	// Protected routes – requires session authentication
 	authGroup := app.Group("/", middleware.AuthMiddleware)
 	authGroup.Get("/result/:id", handlers.ShowResult)
@@ -45,7 +40,6 @@ func SetupRoutes(app *fiber.App) {
 	workerGroup.Get("/solve-queue", handlers.ShowSolveQueue)
 	workerGroup.Get("/captcha/:id", handlers.ShowCaptcha)
 	workerGroup.Post("/solve/:id", handlers.HandleCaptchaSolution)
-	workerGroup.Post("/solution", handlers.SubmitCaptchaSolution)
 	workerGroup.Get("/tasks", handlers.ShowTaskList)
 
 	// Client routes (with prefix /client)

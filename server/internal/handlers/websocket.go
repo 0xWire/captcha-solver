@@ -4,11 +4,17 @@ import (
 	"captcha-solver/internal/config"
 	"captcha-solver/internal/middleware"
 	"captcha-solver/internal/models"
+	"captcha-solver/internal/rabbitmq"
+	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
-	"log"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // Handle WebSocket connections
@@ -29,7 +35,7 @@ func HandleWebSocket(c *websocket.Conn) {
 	if err := json.Unmarshal(msg, &auth); err != nil {
 		log.Println("❌ Некорректный JSON в WebSocket")
 		if err := c.WriteJSON(map[string]string{
-			"status": "error",
+			"status":  "error",
 			"message": "Invalid JSON format",
 		}); err != nil {
 			log.Println("Error sending error message:", err)
@@ -47,7 +53,7 @@ func HandleWebSocket(c *websocket.Conn) {
 		if err == sql.ErrNoRows {
 			log.Println("❌ Неверный API ключ через WebSocket:", auth.ApiKey)
 			if err := c.WriteJSON(map[string]string{
-				"status": "error",
+				"status":  "error",
 				"message": "Invalid API key",
 			}); err != nil {
 				log.Println("Error sending error message:", err)
@@ -55,7 +61,7 @@ func HandleWebSocket(c *websocket.Conn) {
 		} else {
 			log.Println("❌ Ошибка проверки API ключа:", err)
 			if err := c.WriteJSON(map[string]string{
-				"status": "error",
+				"status":  "error",
 				"message": "Server error during authentication",
 			}); err != nil {
 				log.Println("Error sending error message:", err)
@@ -64,12 +70,12 @@ func HandleWebSocket(c *websocket.Conn) {
 		return
 	}
 
-	// Check if user has appropriate role
-	if user.Role != "worker" && user.Role != "admin" {
+	// Check if user has appropriate role for WebSocket connection
+	if user.Role != "worker" && user.Role != "admin" && user.Role != "client" {
 		log.Printf("❌ Пользователь %s имеет недопустимую роль: %s", user.Username, user.Role)
 		if err := c.WriteJSON(map[string]string{
-			"status": "error",
-			"message": "Only workers and admins can connect via WebSocket",
+			"status":  "error",
+			"message": "Only workers, clients and admins can connect via WebSocket",
 		}); err != nil {
 			log.Println("Error sending error message:", err)
 		}
@@ -80,10 +86,10 @@ func HandleWebSocket(c *websocket.Conn) {
 
 	// Send authentication success message
 	authSuccessMsg := map[string]interface{}{
-		"status": "ok",
-		"balance": user.Balance,
+		"status":   "ok",
+		"balance":  user.Balance,
 		"username": user.Username,
-		"role": user.Role,
+		"role":     user.Role,
 	}
 	if err := c.WriteJSON(authSuccessMsg); err != nil {
 		log.Println("Error sending auth success message:", err)
@@ -113,11 +119,17 @@ func HandleWebSocket(c *websocket.Conn) {
 		// Handle different message types
 		switch commandMsg.Command {
 		case "get_task":
-			// Client is requesting a task
+			if user.Role != "worker" && user.Role != "admin" {
+				c.WriteJSON(map[string]string{"status": "error", "message": "Only workers and admins can get tasks"})
+				continue
+			}
 			fetchAndSendTask(c, user)
 
 		case "submit_solution":
-			// Client is submitting a solution
+			if user.Role != "worker" && user.Role != "admin" {
+				c.WriteJSON(map[string]string{"status": "error", "message": "Only workers and admins can submit solutions"})
+				continue
+			}
 			var solutionData models.Task
 			if err := json.Unmarshal(msgBytes, &solutionData); err != nil {
 				log.Println("❌ Invalid solution JSON:", err)
@@ -147,6 +159,146 @@ func HandleWebSocket(c *websocket.Conn) {
 						log.Println("Error sending confirmation:", err)
 					}
 				}
+			}
+
+		case "create_task":
+			if user.Role != "client" && user.Role != "admin" {
+				c.WriteJSON(map[string]string{"status": "error", "message": "Only clients and admins can create tasks"})
+				continue
+			}
+			// Client is creating a new task
+			var taskData struct {
+				SiteKey     string `json:"sitekey"`
+				TargetURL   string `json:"target_url"`
+				CaptchaType string `json:"captcha_type"`
+			}
+			if err := json.Unmarshal(msgBytes, &taskData); err != nil {
+				log.Println("❌ Invalid task JSON:", err)
+				continue
+			}
+
+			if taskData.SiteKey == "" || taskData.TargetURL == "" {
+				errorMsg := map[string]string{"status": "error", "message": "Sitekey and target URL are required"}
+				if err := c.WriteJSON(errorMsg); err != nil {
+					log.Println("Error sending error message:", err)
+				}
+				continue
+			}
+
+			if taskData.CaptchaType == "" {
+				taskData.CaptchaType = "hcaptcha" // Default type
+			}
+
+			// Insert task with proper timestamp
+			res, err := config.DB.Exec("INSERT INTO tasks (user_id, captcha_type, sitekey, target_url, created_at) VALUES (?, ?, ?, ?, ?)",
+				user.ID, taskData.CaptchaType, taskData.SiteKey, taskData.TargetURL, time.Now().Format(time.RFC3339))
+			if err != nil {
+				log.Println("Error creating task:", err)
+				errorMsg := map[string]string{"status": "error", "message": "Failed to create task"}
+				if err := c.WriteJSON(errorMsg); err != nil {
+					log.Println("Error sending error message:", err)
+				}
+				continue
+			}
+
+			taskID, _ := res.LastInsertId()
+			task := &models.CaptchaTask{
+				ID:          taskID,
+				UserID:      user.ID,
+				CaptchaType: taskData.CaptchaType,
+				SiteKey:     taskData.SiteKey,
+				TargetURL:   taskData.TargetURL,
+			}
+
+			// Send to RabbitMQ
+			taskBytes, err := json.Marshal(task)
+			if err != nil {
+				log.Println("Error marshaling task:", err)
+				errorMsg := map[string]string{"status": "error", "message": "Failed to process task"}
+				if err := c.WriteJSON(errorMsg); err != nil {
+					log.Println("Error sending error message:", err)
+				}
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			err = rabbitmq.RabbitMQChannel.PublishWithContext(ctx,
+				"",               // exchange
+				config.QueueName, // routing key
+				false,            // mandatory
+				false,            // immediate
+				amqp.Publishing{
+					ContentType: "application/json",
+					Body:        taskBytes,
+				})
+			if err != nil {
+				log.Println("Error publishing to RabbitMQ:", err)
+				errorMsg := map[string]string{"status": "error", "message": "Failed to queue task"}
+				if err := c.WriteJSON(errorMsg); err != nil {
+					log.Println("Error sending error message:", err)
+				}
+				continue
+			}
+
+			successMsg := map[string]interface{}{
+				"status": "success",
+				"task":   task,
+			}
+			if err := c.WriteJSON(successMsg); err != nil {
+				log.Println("Error sending success message:", err)
+			}
+
+		case "get_tasks":
+			// Client is requesting all tasks
+			rows, err := config.DB.Query("SELECT id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response FROM tasks WHERE user_id = ?", user.ID)
+			if err != nil {
+				log.Println("Error fetching tasks:", err)
+				errorMsg := map[string]string{"status": "error", "message": "Failed to retrieve tasks"}
+				if err := c.WriteJSON(errorMsg); err != nil {
+					log.Println("Error sending error message:", err)
+				}
+				continue
+			}
+			defer rows.Close()
+
+			var tasksList []*models.CaptchaTask
+			for rows.Next() {
+				var task models.CaptchaTask
+				if err := rows.Scan(&task.ID, &task.UserID, &task.SolverID, &task.CaptchaType, &task.SiteKey, &task.TargetURL, &task.CaptchaResponse); err != nil {
+					continue
+				}
+				tasksList = append(tasksList, &task)
+			}
+
+			successMsg := map[string]interface{}{
+				"status": "success",
+				"tasks":  tasksList,
+			}
+			if err := c.WriteJSON(successMsg); err != nil {
+				log.Println("Error sending success message:", err)
+			}
+
+		case "get_queue_count":
+			// Client is requesting queue count
+			var count int
+			err := config.DB.QueryRow("SELECT COUNT(*) FROM tasks WHERE captcha_response IS NULL OR captcha_response = ''").Scan(&count)
+			if err != nil {
+				log.Println("Error fetching queue count:", err)
+				errorMsg := map[string]string{"status": "error", "message": "Failed to retrieve queue count"}
+				if err := c.WriteJSON(errorMsg); err != nil {
+					log.Println("Error sending error message:", err)
+				}
+				continue
+			}
+
+			successMsg := map[string]interface{}{
+				"status": "success",
+				"count":  count,
+			}
+			if err := c.WriteJSON(successMsg); err != nil {
+				log.Println("Error sending success message:", err)
 			}
 
 		default:
@@ -227,7 +379,7 @@ func HandleSimpleAuth(c *fiber.Ctx) error {
 	var req middleware.AuthRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{
-			"status": "error",
+			"status":  "error",
 			"message": "Invalid request format",
 		})
 	}
@@ -244,13 +396,13 @@ func HandleSimpleAuth(c *fiber.Ctx) error {
 		if err == sql.ErrNoRows {
 			log.Println("🔐 Неудачная авторизация с API ключом:", req.ApiKey)
 			return c.Status(401).JSON(fiber.Map{
-				"status": "error",
+				"status":  "error",
 				"message": "Invalid API key",
 			})
 		}
 		log.Println("DB error during API auth:", err)
 		return c.Status(500).JSON(fiber.Map{
-			"status": "error",
+			"status":  "error",
 			"message": "Server error during authentication",
 		})
 	}
@@ -259,7 +411,7 @@ func HandleSimpleAuth(c *fiber.Ctx) error {
 	if user.Role != "worker" && user.Role != "client" && user.Role != "admin" {
 		log.Printf("🔐 Пользователь %s имеет недопустимую роль: %s", user.Username, user.Role)
 		return c.Status(403).JSON(fiber.Map{
-			"status": "error",
+			"status":  "error",
 			"message": "User role not allowed",
 		})
 	}

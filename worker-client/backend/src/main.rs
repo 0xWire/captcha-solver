@@ -198,73 +198,106 @@ async fn run_task_mode() {
             // ждем ответ
             match read.next().await {
                 Some(Ok(msg)) if msg.is_text() => {
-                    let response = msg.to_text().unwrap_or("");
-                    if !response.is_empty() {
-                        // Проверка валидности JSON перед выводом
-                        if let Ok(_) = serde_json::from_str::<serde_json::Value>(response) {
-                            println!("{}", response);
-                        } else {
-                            eprintln!("⚠️ Получен невалидный JSON от сервера");
-                            println!("{}", json!({
-                                "status": "error",
-                                "message": "invalid_server_response"
-                            }));
-                        }
-                    } else {
-                        println!("{}", json!({
-                            "status": "error",
-                            "message": "empty_response"
-                        }));
-                    }
+                    println!("{}", msg.to_text().unwrap_or(""));
                 },
                 _ => {
-                    eprintln!("⚠️ Не получен ответ на запрос задачи");
-                    println!("{}", json!({
-                        "status": "error",
-                        "message": "no_response"
-                    }));
+                    eprintln!("❌ Не получен ответ на запрос задачи");
                 }
             }
+        } else if parsed.get("command") == Some(&json!("create_task")) {
+            let cmd = json!({
+                "command": "create_task",
+                "sitekey": parsed.get("sitekey").unwrap_or(&json!("")),
+                "target_url": parsed.get("target_url").unwrap_or(&json!("")),
+                "captcha_type": parsed.get("captcha_type").unwrap_or(&json!("hcaptcha"))
+            });
+            if let Err(e) = write.send(cmd.to_string().into()).await {
+                eprintln!("❌ Ошибка создания задачи: {e}");
+                break;
+            }
 
+            // ждем ответ
+            match read.next().await {
+                Some(Ok(msg)) if msg.is_text() => {
+                    println!("{}", msg.to_text().unwrap_or(""));
+                },
+                _ => {
+                    eprintln!("❌ Не получен ответ на создание задачи");
+                }
+            }
+        } else if parsed.get("command") == Some(&json!("get_tasks")) {
+            let cmd = json!({ "command": "get_tasks" });
+            if let Err(e) = write.send(cmd.to_string().into()).await {
+                eprintln!("❌ Ошибка запроса задач: {e}");
+                break;
+            }
+
+            // ждем ответ
+            match read.next().await {
+                Some(Ok(msg)) if msg.is_text() => {
+                    println!("{}", msg.to_text().unwrap_or(""));
+                },
+                _ => {
+                    eprintln!("❌ Не получен ответ на запрос задач");
+                }
+            }
+        } else if parsed.get("command") == Some(&json!("get_task")) {
+            let cmd = json!({
+                "command": "get_task",
+                "task_id": parsed.get("task_id").unwrap_or(&json!(0))
+            });
+            if let Err(e) = write.send(cmd.to_string().into()).await {
+                eprintln!("❌ Ошибка запроса задачи: {e}");
+                break;
+            }
+
+            // ждем ответ
+            match read.next().await {
+                Some(Ok(msg)) if msg.is_text() => {
+                    println!("{}", msg.to_text().unwrap_or(""));
+                },
+                _ => {
+                    eprintln!("❌ Не получен ответ на запрос задачи");
+                }
+            }
         } else if parsed.get("command") == Some(&json!("submit_solution")) {
-            if let Err(e) = write.send(line.into()).await {
+            let cmd = json!({
+                "command": "submit_solution",
+                "task_id": parsed.get("task_id").unwrap_or(&json!(0)),
+                "solution": parsed.get("solution").unwrap_or(&json!(""))
+            });
+            if let Err(e) = write.send(cmd.to_string().into()).await {
                 eprintln!("❌ Ошибка отправки решения: {e}");
                 break;
             }
 
-            // ответ о сохранении решения
+            // ждем ответ
             match read.next().await {
                 Some(Ok(msg)) if msg.is_text() => {
-                    let response = msg.to_text().unwrap_or("");
-                    if !response.is_empty() {
-                        // Проверка валидности JSON перед выводом
-                        if let Ok(_) = serde_json::from_str::<serde_json::Value>(response) {
-                            println!("{}", response);
-                        } else {
-                            eprintln!("⚠️ Получен невалидный JSON от сервера при сохранении");
-                            println!("{}", json!({
-                                "status": "error",
-                                "message": "invalid_server_response"
-                            }));
-                        }
-                    } else {
-                        println!("{}", json!({
-                            "status": "error",
-                            "message": "empty_response"
-                        }));
-                    }
+                    println!("{}", msg.to_text().unwrap_or(""));
                 },
                 _ => {
-                    eprintln!("⚠️ Не получен ответ на отправку решения");
-                    println!("{}", json!({
-                        "status": "error",
-                        "message": "no_response"
-                    }));
+                    eprintln!("❌ Не получен ответ на отправку решения");
                 }
             }
+        } else if parsed.get("command") == Some(&json!("get_queue_count")) {
+            let cmd = json!({ "command": "get_queue_count" });
+            if let Err(e) = write.send(cmd.to_string().into()).await {
+                eprintln!("❌ Ошибка запроса количества задач: {e}");
+                break;
+            }
 
+            // ждем ответ
+            match read.next().await {
+                Some(Ok(msg)) if msg.is_text() => {
+                    println!("{}", msg.to_text().unwrap_or(""));
+                },
+                _ => {
+                    eprintln!("❌ Не получен ответ на запрос количества задач");
+                }
+            }
         } else {
-            eprintln!("⚠️ Неизвестная команда: {}", line);
+            eprintln!("⚠️ Неизвестная команда: {}", parsed.get("command").unwrap_or(&json!("unknown")));
         }
     }
 
