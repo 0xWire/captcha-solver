@@ -3,8 +3,9 @@ package db
 import (
 	"captcha-solver/internal/config"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var err error
@@ -28,9 +29,10 @@ func createTables() error {
 		username TEXT NOT NULL UNIQUE,
 		password_hash TEXT NOT NULL,
 		role TEXT NOT NULL,
-		api_key TEXT,
+		api_key TEXT UNIQUE,
 		balance REAL NOT NULL DEFAULT 0,
-		created_at DATETIME NOT NULL
+		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 	)
 	`)
 	if err != nil {
@@ -47,45 +49,50 @@ func createTables() error {
 		sitekey TEXT NOT NULL,
 		target_url TEXT NOT NULL,
 		captcha_response TEXT,
-		created_at DATETIME NOT NULL,
-		FOREIGN KEY(user_id) REFERENCES users(id),
-		FOREIGN KEY(solver_id) REFERENCES users(id)
+		status TEXT NOT NULL DEFAULT 'pending',
+		error_message TEXT,
+		attempts INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+		updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+		solved_at DATETIME,
+		FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY(solver_id) REFERENCES users(id) ON DELETE SET NULL
 	)
 	`)
 	if err != nil {
 		return err
 	}
 
-	// Check if the tasks table has the created_at column.
-	rows, err := config.DB.Query("PRAGMA table_info(tasks)")
+	// Create indexes for tasks table
+	_, err = config.DB.Exec(`
+	CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
+	CREATE INDEX IF NOT EXISTS idx_tasks_solver_id ON tasks(solver_id);
+	CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+	CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
+	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+	CREATE INDEX IF NOT EXISTS idx_tasks_captcha_type ON tasks(captcha_type);
+	CREATE INDEX IF NOT EXISTS idx_tasks_pending ON tasks(status) WHERE status = 'pending';
+	`)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	hasCreatedAt := false
-	for rows.Next() {
-		var cid int
-		var name string
-		var ctype string
-		var notnull int
-		var dfltValue sql.NullString
-		var pk int
-		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
-			return err
-		}
-		if name == "created_at" {
-			hasCreatedAt = true
-			break
-		}
-	}
+	// Create triggers for updated_at
+	_, err = config.DB.Exec(`
+	CREATE TRIGGER IF NOT EXISTS update_users_timestamp 
+	AFTER UPDATE ON users
+	BEGIN
+		UPDATE users SET updated_at = datetime('now') WHERE id = NEW.id;
+	END;
 
-	// If created_at column does not exist, alter the table.
-	if !hasCreatedAt {
-		_, err = config.DB.Exec("ALTER TABLE tasks ADD COLUMN created_at DATETIME NOT NULL DEFAULT (datetime('now'))")
-		if err != nil {
-			return err
-		}
+	CREATE TRIGGER IF NOT EXISTS update_tasks_timestamp 
+	AFTER UPDATE ON tasks
+	BEGIN
+		UPDATE tasks SET updated_at = datetime('now') WHERE id = NEW.id;
+	END;
+	`)
+	if err != nil {
+		return err
 	}
 
 	return nil

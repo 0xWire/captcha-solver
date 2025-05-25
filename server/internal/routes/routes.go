@@ -10,6 +10,12 @@ import (
 )
 
 func SetupRoutes(app *fiber.App) {
+	// API routes - повинні бути першими, щоб уникнути конфлікту з сесійною аутентифікацією
+	apiGroup := app.Group("/api")
+	apiGroup.Post("/captcha/submit", middleware.APIKeyMiddleware, handlers.SubmitCaptcha)
+	apiGroup.Get("/captcha/result/:id", middleware.APIKeyMiddleware, handlers.GetCaptchaResult)
+	apiGroup.Post("/captcha/solution", middleware.APIKeyMiddleware, handlers.SubmitSolution)
+
 	// Public routes
 	app.Get("/login", handlers.ShowLoginPage)
 	app.Post("/login", handlers.HandleLogin)

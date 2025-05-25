@@ -317,7 +317,38 @@ func fetchAndSendTask(c *websocket.Conn, user models.User) {
 	var taskID int64
 	var siteKey, targetURL, captchaType string
 
+	// Спочатку перевіряємо, чи є вже призначені завдання для цього робітника
 	err := config.DB.QueryRow(`
+		SELECT id, captcha_type, sitekey, target_url 
+		FROM tasks 
+		WHERE solver_id IS NULL AND (captcha_response IS NULL OR captcha_response = '')
+		ORDER BY created_at ASC
+		LIMIT 1
+	`, user.ID).Scan(&taskID, &captchaType, &siteKey, &targetURL)
+
+	if err == nil {
+		// Знайдено призначене завдання
+		task := models.Task{
+			Type:    captchaType,
+			SiteKey: siteKey,
+			URL:     targetURL,
+			TaskId:  taskID,
+		}
+
+		// Log the task being sent
+		taskJson, _ := json.Marshal(task)
+		log.Printf("📤 WebSocket SEND TASK (assigned): %s", string(taskJson))
+
+		if err := c.WriteJSON(task); err != nil {
+			log.Println("Error sending task over WebSocket:", err)
+		} else {
+			log.Printf("Task #%d sent to worker %s (ID: %d)\n", taskID, user.Username, user.ID)
+		}
+		return
+	}
+
+	// Якщо немає призначених завдань, шукаємо нове
+	err = config.DB.QueryRow(`
 		SELECT id, captcha_type, sitekey, target_url 
 		FROM tasks 
 		WHERE solver_id IS NULL AND captcha_response IS NULL
@@ -363,7 +394,7 @@ func fetchAndSendTask(c *websocket.Conn, user models.User) {
 
 	// Log the task being sent
 	taskJson, _ := json.Marshal(task)
-	log.Println("📤 WebSocket SEND TASK:", string(taskJson))
+	log.Printf("📤 WebSocket SEND TASK (new): %s", string(taskJson))
 
 	if err := c.WriteJSON(task); err != nil {
 		log.Println("Error sending task over WebSocket:", err)

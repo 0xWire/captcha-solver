@@ -198,7 +198,21 @@ async fn run_task_mode() {
             // ждем ответ
             match read.next().await {
                 Some(Ok(msg)) if msg.is_text() => {
-                    println!("{}", msg.to_text().unwrap_or(""));
+                    let text = msg.to_text().unwrap_or("");
+                    if !text.trim().is_empty() {
+                        match serde_json::from_str::<serde_json::Value>(text) {
+                            Ok(val) => {
+                                if val.get("status") == Some(&json!("no_tasks")) {
+                                    eprintln!("ℹ️ Немає задач у черзі");
+                                } else {
+                                    println!("{}", text);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("❌ Помилка парсингу JSON: {e}, дані: {text}");
+                            }
+                        }
+                    }
                 },
                 _ => {
                     eprintln!("❌ Не получен ответ на запрос задачи");
@@ -254,7 +268,21 @@ async fn run_task_mode() {
             // ждем ответ
             match read.next().await {
                 Some(Ok(msg)) if msg.is_text() => {
-                    println!("{}", msg.to_text().unwrap_or(""));
+                    let text = msg.to_text().unwrap_or("");
+                    if !text.trim().is_empty() {
+                        match serde_json::from_str::<serde_json::Value>(text) {
+                            Ok(val) => {
+                                if val.get("status") == Some(&json!("no_tasks")) {
+                                    eprintln!("ℹ️ Немає задач у черзі");
+                                } else {
+                                    println!("{}", text);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("❌ Помилка парсингу JSON: {e}, дані: {text}");
+                            }
+                        }
+                    }
                 },
                 _ => {
                     eprintln!("❌ Не получен ответ на запрос задачи");

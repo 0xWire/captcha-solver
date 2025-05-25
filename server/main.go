@@ -6,9 +6,10 @@ import (
 	"captcha-solver/internal/db"
 	"captcha-solver/internal/rabbitmq"
 	"captcha-solver/internal/routes"
+	"log"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
-	"log"
 )
 
 func main() {
@@ -35,6 +36,6 @@ func main() {
 
 	data.RootRedirect(app)
 
-	log.Println("Server running on http://localhost:3058")
+	log.Println("Server running on http://localhost:8080")
 	log.Fatal(app.Listen(":8080"))
 }

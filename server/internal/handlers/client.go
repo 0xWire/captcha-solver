@@ -4,6 +4,7 @@ import (
 	"captcha-solver/internal/config"
 	"captcha-solver/internal/models"
 	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -64,8 +65,21 @@ func GetTask(c *fiber.Ctx) error {
 	}
 
 	var task models.CaptchaTask
-	err := config.DB.QueryRow("SELECT id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response FROM tasks WHERE id = ? AND user_id = ?", taskID, user.ID).
-		Scan(&task.ID, &task.UserID, &task.SolverID, &task.CaptchaType, &task.SiteKey, &task.TargetURL, &task.CaptchaResponse)
+	err := config.DB.QueryRow(`
+		SELECT id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response,
+		       datetime(created_at, 'localtime') as created_at
+		FROM tasks 
+		WHERE id = ? AND user_id = ?
+	`, taskID, user.ID).Scan(
+		&task.ID,
+		&task.UserID,
+		&task.SolverID,
+		&task.CaptchaType,
+		&task.SiteKey,
+		&task.TargetURL,
+		&task.CaptchaResponse,
+		&task.CreatedAt,
+	)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Task not found"})
 	}
