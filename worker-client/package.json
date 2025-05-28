@@ -23,12 +23,17 @@
       "auth.html",
       "menu.html",
       "dist/captcha_cli",
+      "dist/captcha_cli.exe",
       "dist/assets/**/*"
     ],
     "extraResources": [
       {
         "from": "dist/captcha_cli",
         "to": "captcha_cli"
+      },
+      {
+        "from": "dist/captcha_cli.exe",
+        "to": "captcha_cli.exe"
       }
     ],
     "directories": {
@@ -39,13 +44,7 @@
       "category": "Utility"
     },
     "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true
+      "target": "portable"
     }
   }
 }
