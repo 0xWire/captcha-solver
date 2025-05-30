@@ -11,12 +11,12 @@ type Task struct {
 
 // CaptchaTask описывает задачу по решению капчи
 type CaptchaTask struct {
-	ID              int64  `json:"id"`
-	UserID          int64  `json:"user_id"`             // пользователь, отправивший задачу
-	SolverID        int64  `json:"solver_id,omitempty"` // пользователь, решивший задачу (если есть)
-	CaptchaType     string `json:"captcha_type"`
-	SiteKey         string `json:"sitekey"`
-	TargetURL       string `json:"target_url"`
-	CaptchaResponse string `json:"captcha_response,omitempty"`
-	CreatedAt       string `json:"created_at"`
+	ID              int64   `json:"id"`
+	UserID          int64   `json:"user_id"`             // пользователь, отправивший задачу
+	SolverID        *int64  `json:"solver_id,omitempty"` // пользователь, решивший задачу (если есть)
+	CaptchaType     string  `json:"captcha_type"`
+	SiteKey         string  `json:"sitekey"`
+	TargetURL       string  `json:"target_url"`
+	CaptchaResponse *string `json:"captcha_response,omitempty"`
+	CreatedAt       string  `json:"created_at"`
 }

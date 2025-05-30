@@ -132,6 +132,9 @@ func GetCaptchaResult(c *fiber.Ctx) error {
 	taskID := c.Params("id")
 	var task models.CaptchaTask
 
+	var solverID sql.NullInt64
+	var captchaResp sql.NullString
+
 	err := config.DB.QueryRow(`
 		SELECT id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response, 
 		       datetime(created_at, 'localtime') as created_at 
@@ -140,11 +143,11 @@ func GetCaptchaResult(c *fiber.Ctx) error {
 	`, taskID).Scan(
 		&task.ID,
 		&task.UserID,
-		&task.SolverID,
+		&solverID,
 		&task.CaptchaType,
 		&task.SiteKey,
 		&task.TargetURL,
-		&task.CaptchaResponse,
+		&captchaResp,
 		&task.CreatedAt,
 	)
 
@@ -159,6 +162,14 @@ func GetCaptchaResult(c *fiber.Ctx) error {
 			"status":  "error",
 			"message": "Database error",
 		})
+	}
+
+	// Переводимо до *типів
+	if solverID.Valid {
+		task.SolverID = &solverID.Int64
+	}
+	if captchaResp.Valid {
+		task.CaptchaResponse = &captchaResp.String
 	}
 
 	return c.JSON(fiber.Map{

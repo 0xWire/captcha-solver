@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+
 	"github.com/gofiber/fiber/v2"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -193,8 +194,8 @@ func HandleCaptchaSolution(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(500).SendString("Ошибка обновления задачи")
 	}
-	task.CaptchaResponse = captchaResponse
-	task.SolverID = currentUser.ID
+	task.CaptchaResponse = &captchaResponse
+	task.SolverID = &currentUser.ID
 
 	// Отправляем результат в очередь результатов RabbitMQ
 	taskBytes, err := json.Marshal(task)
