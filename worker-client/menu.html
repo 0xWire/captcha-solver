@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Меню</title>
+  <title>Menu</title>
   <style>
     body {
       font-family: sans-serif;
@@ -28,22 +28,26 @@
   </style>
 </head>
 <body>
-  <h1>Главное меню</h1>
-  <div id="balance">Баланс: Загрузка...</div>
-  <button onclick="solve()">Решать капчи</button>
+  <h1>Main menu</h1>
+  <div id="balance">Balance: Loading...</div>
+  <button onclick="solve()">Solve captchas</button>
 
   <script>
     window.onload = async () => {
-      const response = await window.electron.getBalance();
-      if (response.ok) {
-        document.getElementById('balance').innerText = `Баланс: ${response.balance}`;
-      } else {
-        document.getElementById('balance').innerText = 'Ошибка загрузки баланса';
-      }
+        const balanceDiv = document.getElementById('balance');
+        window.getBalance().then((result) => {
+            if (result.ok) {
+                balanceDiv.innerText = 'Balance: ' + result.balance;
+                console.log("💰 Balance:", result.balance);
+            } else {
+                balanceDiv.innerText = 'Error: ' + result.message;
+                console.warn("❌ Balance error:", result.message);
+            }
+        });
     }
 
     function solve() {
-      window.electron.send('menu:solve');
+      window.ipcRenderer.send('menu:solve');
     }
   </script>
 </body>

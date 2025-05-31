@@ -22,6 +22,7 @@
       "preload.js",
       "auth.html",
       "menu.html",
+      "captcha.html",
       "dist/assets/**/*"
     ],
     "extraResources": [

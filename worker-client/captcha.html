@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Решите капчу</title>
+  <script>
+    function onCaptchaSolved(token) {
+      console.log("✅ Captcha solved: (captcha.html)", token);
+
+      if (window.ipcRenderer) {
+        window.ipcRenderer.send('captcha:solved', {
+          token,
+          url: window.task?.url,
+          sitekey: window.task?.sitekey,
+          type: window.task?.type,
+          task_id: window.task?.task_id
+        });
+      } else {
+        console.warn('ipcRenderer not available!');
+      }
+
+      const wrap = document.getElementById("captcha-wrapper");
+      if (wrap) wrap.remove();
+    }
+
+    function renderCaptcha(task) {
+      console.log("📥 Got task:", task);
+
+      const wrapper = document.createElement('div');
+      wrapper.id = "captcha-wrapper";
+      wrapper.style = `
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        background: #0f172a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+
+      wrapper.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.3);">
+          <h2 style="text-align:center; margin-bottom: 16px;">Решите капчу</h2>
+          <div class="g-recaptcha" data-sitekey="${task.sitekey}" data-callback="onCaptchaSolved"></div>
+        </div>
+      `;
+
+      document.body.appendChild(wrapper);
+
+      const script = document.createElement('script');
+      script.src = 'https://www.google.com/recaptcha/api.js';
+      script.onload = () => console.log("✅ Captcha loaded");
+      script.onerror = () => console.error("❌ Failed to load captcha script");
+      document.body.appendChild(script);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.task) {
+        renderCaptcha(window.task);
+      } else {
+        // wait for preload
+        window.addEventListener('taskReady', () => {
+          renderCaptcha(window.task);
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+</body>
+</html>

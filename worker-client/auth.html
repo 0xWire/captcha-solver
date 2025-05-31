@@ -46,7 +46,7 @@
         return;
       }
       
-      const res = await window.electron.invoke('auth:login', key);
+      const res = await window.ipcRenderer.invoke('auth:login', key);
       
       if (!res.ok) {
         document.getElementById('error').style.display = 'block';
