@@ -22,25 +22,19 @@
       "preload.js",
       "auth.html",
       "menu.html",
-      "dist/captcha_cli",
-      "dist/captcha_cli.exe",
       "dist/assets/**/*"
     ],
     "extraResources": [
       {
         "from": "dist/captcha_cli",
         "to": "captcha_cli"
-      },
-      {
-        "from": "dist/captcha_cli.exe",
-        "to": "captcha_cli.exe"
       }
     ],
     "directories": {
       "output": "dist"
     },
     "linux": {
-      "target": "dir",
+      "target": "AppImage",
       "category": "Utility"
     },
     "win": {
