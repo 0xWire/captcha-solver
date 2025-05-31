@@ -321,7 +321,7 @@ func fetchAndSendTask(c *websocket.Conn, user models.User) {
 	err := config.DB.QueryRow(`
 		SELECT id, captcha_type, sitekey, target_url 
 		FROM tasks 
-		WHERE solver_id IS NULL AND (captcha_response IS NULL OR captcha_response = '')
+		WHERE solver_id = ? AND (captcha_response IS NULL OR captcha_response = '')
 		ORDER BY created_at ASC
 		LIMIT 1
 	`, user.ID).Scan(&taskID, &captchaType, &siteKey, &targetURL)
@@ -351,7 +351,7 @@ func fetchAndSendTask(c *websocket.Conn, user models.User) {
 	err = config.DB.QueryRow(`
 		SELECT id, captcha_type, sitekey, target_url 
 		FROM tasks 
-		WHERE solver_id IS NULL AND captcha_response IS NULL
+		WHERE solver_id IS NULL AND (captcha_response IS NULL OR captcha_response = '')
 		ORDER BY created_at ASC
 		LIMIT 1
 	`).Scan(&taskID, &captchaType, &siteKey, &targetURL)
@@ -374,12 +374,24 @@ func fetchAndSendTask(c *websocket.Conn, user models.User) {
 	}
 
 	// Assign the task to this worker
-	_, err = config.DB.Exec("UPDATE tasks SET solver_id = ? WHERE id = ?", user.ID, taskID)
+	_, err = config.DB.Exec("UPDATE tasks SET solver_id = ? WHERE id = ? AND (captcha_response IS NULL OR captcha_response = '')", user.ID, taskID)
 	if err != nil {
 		log.Println("Error assigning task to worker:", err)
 		errorMsg := map[string]string{"status": "error", "message": "Failed to assign task"}
 		if err := c.WriteJSON(errorMsg); err != nil {
 			log.Println("Error sending error message:", err)
+		}
+		return
+	}
+
+	// Verify that the task was actually assigned and still needs solving
+	var assigned bool
+	err = config.DB.QueryRow("SELECT 1 FROM tasks WHERE id = ? AND solver_id = ? AND (captcha_response IS NULL OR captcha_response = '')", taskID, user.ID).Scan(&assigned)
+	if err != nil || !assigned {
+		log.Println("Task was already solved or assigned to another worker")
+		noTaskMsg := map[string]string{"status": "no_tasks"}
+		if err := c.WriteJSON(noTaskMsg); err != nil {
+			log.Println("Error sending no-task message:", err)
 		}
 		return
 	}

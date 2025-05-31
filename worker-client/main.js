@@ -3,7 +3,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 let mainWin;
-let apiKey = null;
+let captchaWin = null;
 let rustProcess = null;
 let rustStdin = null;
 
@@ -32,7 +32,7 @@ function createWindow(htmlFile) {
     { label: 'Open developer tools', click: () => mainWin.webContents.toggleDevTools() }
   ]);
 
-  mainWin.webContents.on('context-menu', (e, params) => {
+  mainWin.webContents.on('context-menu', () => {
     contextMenu.popup();
   });
 
@@ -207,24 +207,7 @@ function startRustSolver() {
           return;
         }
 
-        const captchaWin = new BrowserWindow({
-          width: 1000,
-          height: 800,
-          show: false,
-          webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
-            contextIsolation: false,
-            nodeIntegration: true,
-            devTools: true
-          }
-        });
-
-        captchaWin.loadURL(task.url);
-
-        captchaWin.webContents.once('did-finish-load', () => {
-          captchaWin.show();
-          injectRecaptcha(captchaWin, task.sitekey);
-        });
+        openCaptchaWindow(task);
 
       } catch (e) {
         console.error("❌ Rust parsing error:", e);
@@ -236,7 +219,7 @@ function startRustSolver() {
     });
 
     rustProcess.on('exit', (code) => {
-      console.log(`Rust завершён с кодом ${code}`);
+      console.log(`Rust exited with code ${code}`);
       rustProcess = null;
       rustStdin = null;
     });
@@ -253,16 +236,41 @@ function startRustSolver() {
   }
 }
 
+function openCaptchaWindow(task) {
+  captchaWin = new BrowserWindow({
+    width: 1000,
+    height: 800,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: false,
+      nodeIntegration: true,
+      devTools: true
+    }
+  });
+
+  captchaWin.loadURL(task.url);
+
+  captchaWin.webContents.once('did-finish-load', () => {
+    captchaWin.show();
+    injectRecaptcha(captchaWin, task.sitekey, task.task_id);
+  });
+
+  captchaWin.on('closed', () => {
+    captchaWin = null;
+  });
+}
+
 function requestNewTask() {
   if (rustStdin && rustStdin.writable) {
-    console.log("📬 Запрос новой задачи");
+    console.log("📬 Requesting new task");
     rustStdin.write(JSON.stringify({ command: "get_task" }) + '\n');
-    } else {
-      console.warn("⚠️ Rust stdin не активен, не могу запросить задачу");
+  } else {
+    console.warn("⚠️ Rust stdin is not active, cannot request task");
   }
 }
 
-function injectRecaptcha(win, sitekey) {
+function injectRecaptcha(win, sitekey, taskId) {
   const script = `
     if (!document.getElementById('injected-recaptcha-overlay')) {
       const overlay = document.createElement('div');
@@ -276,9 +284,24 @@ function injectRecaptcha(win, sitekey) {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         pointer-events: all;
+        padding-top: 20px;
       \`;
+
+      const button = document.createElement('button');
+      button.innerText = 'Return to main menu';
+      button.style = \`
+        margin-bottom: 20px;
+        padding: 10px 20px;
+        font-size: 14px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+      \`;
+      button.onclick = () => {
+        window.postMessage({ type: 'return-menu' }, '*');
+      };
 
       const wrapper = document.createElement('div');
       wrapper.id = 'injected-recaptcha';
@@ -294,7 +317,7 @@ function injectRecaptcha(win, sitekey) {
       \`;
 
       const title = document.createElement('div');
-      title.innerText = 'Решите капчу';
+      title.innerText = 'Solve the captcha';
       title.style = \`
         font-size: 20px;
         font-weight: bold;
@@ -307,6 +330,7 @@ function injectRecaptcha(win, sitekey) {
       captchaDiv.setAttribute('data-sitekey', '${sitekey}');
       captchaDiv.setAttribute('data-callback', 'onCaptchaSolved');
 
+      overlay.appendChild(button);
       wrapper.appendChild(title);
       wrapper.appendChild(captchaDiv);
       overlay.appendChild(wrapper);
@@ -318,24 +342,50 @@ function injectRecaptcha(win, sitekey) {
 
       window.onCaptchaSolved = function(token) {
         console.log("✅ [Injected] Captcha solved, token:", token);
-        window.postMessage({ type: 'captcha-solved', token }, '*');
+        window.postMessage({ type: 'captcha-solved', token, task_id: ${taskId} }, '*');
         const overlay = document.getElementById('injected-recaptcha-overlay');
         if (overlay) overlay.remove();
       };
 
-      console.log("✅ Captcha successfully injected with full background overlay");
+      console.log("✅ Captcha injected with return button");
     }
   `;
 
   win.webContents.executeJavaScript(script).catch(err => {
-    console.error("❌ Ошибка инъекции капчи:", err);
+    console.error("❌ Error injecting captcha:", err);
   });
 }
 
-
 ipcMain.on('captcha:solved', (_event, solution) => {
-  console.log("✅ [MAIN] Получен токен капчи:", solution.token);
- //TODO: Send solution to Rust
+  console.log("✅ [MAIN] Captcha token received:", solution.token);
 
-  mainWin.loadFile('menu.html');
+  if (rustStdin && rustStdin.writable) {
+    rustStdin.write(JSON.stringify({
+      command: "submit_solution",
+      task_id: solution.task_id,
+      solution: solution.token
+    }) + '\n');
+
+    console.log("📨 Sent solution to Rust, requesting next task...");
+
+    if (captchaWin) {
+      captchaWin.close();
+      captchaWin = null;
+    }
+
+    setTimeout(() => {
+      requestNewTask();
+    }, 500);
+  } else {
+    console.warn("⚠️ Rust stdin is not writable, cannot send solution");
+    mainWin.loadFile('menu.html');
+  }
+});
+
+ipcMain.on('close:captcha', () => {
+  if (captchaWin) {
+    console.log("🔙 Closing captcha window, returning to main menu");
+    captchaWin.close();
+    captchaWin = null;
+  }
 });
