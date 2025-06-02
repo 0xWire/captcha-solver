@@ -1,16 +1,16 @@
 {{define "index"}}
 <div class="bg-white rounded-lg shadow-md p-6">
-    <h1 class="text-2xl font-bold text-gray-800 mb-6">Очередь задач капчи</h1>
+    <h1 class="text-2xl font-bold text-gray-800 mb-6">Task Queue</h1>
     <div class="mb-4 flex justify-between items-center">
         <div class="flex space-x-2">
             <span class="text-sm text-gray-500">Всего задач: {{len .Tasks}}</span>
         </div>
         <div class="flex space-x-2">
             <a href="/solve-queue" class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded transition">
-                Решать задачи
+                Solve Tasks
             </a>
             <a href="/create" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded transition">
-                Создать задачу
+                Create Task
             </a>
         </div>
     </div>
@@ -42,23 +42,23 @@
                 <td class="py-3 px-4 border-b border-gray-200">{{$task.SiteKey}}</td>
                 <td class="py-3 px-4 border-b border-gray-200">
                     {{if $task.CaptchaResponse}}
-                    <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Решена</span>
+                    <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Solved</span>
                     {{else}}
-                    <span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded">Ожидает</span>
+                    <span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded">Waiting</span>
                     {{end}}
                 </td>
                 <td class="py-3 px-4 border-b border-gray-200">
                     {{if not $task.CaptchaResponse}}
                     {{if eq $.User.Role "worker"}}
-                    <a href="/worker/captcha/{{$task.ID}}" class="text-blue-600 hover:text-blue-800 font-medium">Решить</a>
+                    <a href="/worker/captcha/{{$task.ID}}" class="text-blue-600 hover:text-blue-800 font-medium">Solve</a>
                     {{else}}
-                    <a href="/captcha/{{$task.ID}}" class="text-blue-600 hover:text-blue-800 font-medium">Решить</a>
+                    <a href="/captcha/{{$task.ID}}" class="text-blue-600 hover:text-blue-800 font-medium">Solve</a>
                     {{end}}
                     {{else}}
                     {{if eq $.User.Role "worker"}}
-                    <a href="/worker/result/{{$task.ID}}" class="text-green-600 hover:text-green-800 font-medium">Посмотреть результат</a>
+                    <a href="/worker/result/{{$task.ID}}" class="text-green-600 hover:text-green-800 font-medium">View Result</a>
                     {{else}}
-                    <a href="/result/{{$task.ID}}" class="text-green-600 hover:text-green-800 font-medium">Посмотреть результат</a>
+                    <a href="/result/{{$task.ID}}" class="text-green-600 hover:text-green-800 font-medium">View Result</a>
                     {{end}}
                     {{end}}
                 </td>
@@ -66,7 +66,7 @@
             {{end}}
             {{if eq (len .Tasks) 0}}
             <tr>
-                <td colspan="6" class="py-8 text-center text-gray-500">Нет доступных задач</td>
+                <td colspan="6" class="py-8 text-center text-gray-500">No tasks available</td>
             </tr>
             {{end}}
             </tbody>

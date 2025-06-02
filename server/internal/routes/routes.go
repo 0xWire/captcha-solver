@@ -39,7 +39,8 @@ func SetupRoutes(app *fiber.App) {
 	adminGroup.Get("/users", handlers.ShowUsersAdmin)
 	adminGroup.Post("/users", handlers.CreateUser)
 	adminGroup.Delete("/users/:id", handlers.DeleteUser)
-	adminGroup.Get("/tasks", handlers.ShowTaskList)
+	adminGroup.Get("/tasks", handlers.ShowAdminTaskList)
+	adminGroup.Delete("/tasks/:id", handlers.DeleteTask)
 
 	// Worker routes (with prefix /worker)
 	workerGroup := authGroup.Group("/worker", middleware.RoleMiddleware("admin", "worker"))

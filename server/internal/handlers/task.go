@@ -5,6 +5,7 @@ import (
 	"captcha-solver/internal/models"
 	"captcha-solver/internal/rabbitmq"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -89,18 +90,54 @@ func ShowResult(c *fiber.Ctx) error {
 		return c.Status(400).SendString("Invalid task ID")
 	}
 
+	// Get the current user
+	currentUser := c.Locals("user").(*models.User)
+
+	// Query to get task with additional user info
 	var task models.CaptchaTask
-	err := config.DB.QueryRow("SELECT id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response FROM tasks WHERE id = ?", taskID).
-		Scan(&task.ID, &task.UserID, &task.SolverID, &task.CaptchaType, &task.SiteKey, &task.TargetURL, &task.CaptchaResponse)
+	var userID int64
+	err := config.DB.QueryRow(`
+		SELECT t.id, t.user_id, t.solver_id, t.captcha_type, t.sitekey, t.target_url, 
+		       t.captcha_response, t.status, t.error_message, t.attempts,
+		       t.created_at, t.updated_at, t.solved_at
+		FROM tasks t
+		WHERE t.id = ?
+	`, taskID).Scan(
+		&task.ID,
+		&userID,
+		&task.SolverID,
+		&task.CaptchaType,
+		&task.SiteKey,
+		&task.TargetURL,
+		&task.CaptchaResponse,
+		&task.Status,
+		&task.ErrorMessage,
+		&task.Attempts,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+		&task.SolvedAt,
+	)
+
 	if err != nil {
-		return c.Status(404).SendString("Task not found")
+		log.Printf("Error retrieving task %d: %v", taskID, err)
+		if err == sql.ErrNoRows {
+			return c.Status(404).SendString("Task not found")
+		}
+		return c.Status(500).SendString("Error retrieving task")
 	}
 
-	// Render a result view (you can reuse an existing template or create a new one)
+	// Check access permissions
+	if currentUser.Role != "admin" && currentUser.ID != userID {
+		return c.Status(403).SendString("Access denied")
+	}
+
+	// Add user info to the task
+	task.UserID = userID
+
 	return c.Render("result", fiber.Map{
 		"Title": "Task Result",
 		"Task":  task,
-		"User":  c.Locals("user").(*models.User),
+		"User":  currentUser,
 	}, "layout")
 }
 

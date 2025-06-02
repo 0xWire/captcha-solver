@@ -102,3 +102,64 @@ func DeleteUser(c *fiber.Ctx) error {
 	}
 	return c.SendString("OK")
 }
+
+// ShowAdminTaskList shows all tasks for admin
+func ShowAdminTaskList(c *fiber.Ctx) error {
+	rows, err := config.DB.Query(`
+		SELECT id, user_id, solver_id, captcha_type, sitekey, target_url, captcha_response, created_at 
+		FROM tasks 
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return c.Status(500).SendString("Error getting tasks")
+	}
+	defer rows.Close()
+
+	var tasks []*models.CaptchaTask
+	for rows.Next() {
+		var task models.CaptchaTask
+		if err := rows.Scan(
+			&task.ID,
+			&task.UserID,
+			&task.SolverID,
+			&task.CaptchaType,
+			&task.SiteKey,
+			&task.TargetURL,
+			&task.CaptchaResponse,
+			&task.CreatedAt,
+		); err != nil {
+			continue
+		}
+		tasks = append(tasks, &task)
+	}
+
+	return c.Render("admin/tasks", fiber.Map{
+		"Title": "Task Management",
+		"User":  c.Locals("user").(*models.User),
+		"Tasks": tasks,
+	}, "layout")
+}
+
+// DeleteTask deletes a task by ID
+func DeleteTask(c *fiber.Ctx) error {
+	taskID := c.Params("id")
+	if taskID == "" {
+		return c.Status(400).SendString("Task ID is required")
+	}
+
+	result, err := config.DB.Exec("DELETE FROM tasks WHERE id = ?", taskID)
+	if err != nil {
+		return c.Status(500).SendString("Error deleting task")
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return c.Status(500).SendString("Error checking delete result")
+	}
+
+	if affected == 0 {
+		return c.Status(404).SendString("Task not found")
+	}
+
+	return c.SendString("OK")
+}

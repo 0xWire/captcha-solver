@@ -1,0 +1,125 @@
+{{define "result"}}
+<div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="px-4 py-6 sm:px-0">
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Captcha Task Result
+                </h3>
+                <p class="mt-1 max-w-2xl text-sm text-gray-500">
+                    Task ID: {{.Task.ID}}
+                </p>
+            </div>
+            <div class="border-t border-gray-200">
+                <dl>
+                    <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Type
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            {{if eq .Task.CaptchaType "recaptcha"}}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">reCAPTCHA</span>
+                            {{else}}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">hCaptcha</span>
+                            {{end}}
+                        </dd>
+                    </div>
+                    <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Target URL
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            <a href="{{.Task.TargetURL}}" target="_blank" class="text-blue-600 hover:text-blue-800">
+                                {{.Task.TargetURL}}
+                            </a>
+                        </dd>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Site Key
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            {{.Task.SiteKey}}
+                        </dd>
+                    </div>
+                    <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Status
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            {{if eq .Task.Status "pending"}}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+                            {{else if eq .Task.Status "solved"}}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Solved</span>
+                            {{else}}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">{{.Task.Status}}</span>
+                            {{end}}
+                            <span class="ml-2 text-sm text-gray-500">({{.Task.Attempts}} attempts)</span>
+                        </dd>
+                    </div>
+                    {{if .Task.CaptchaResponse}}
+                    <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Solution Token
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            <div class="relative">
+                                <pre class="bg-gray-800 text-white p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all">{{.Task.CaptchaResponse}}</pre>
+                                <button onclick="copyToClipboard('{{.Task.CaptchaResponse}}')" 
+                                        class="absolute top-2 right-2 bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-600 text-sm">
+                                    Copy
+                                </button>
+                            </div>
+                        </dd>
+                    </div>
+                    {{end}}
+                    {{if .Task.ErrorMessage}}
+                    <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Error Message
+                        </dt>
+                        <dd class="mt-1 text-sm text-red-600 sm:mt-0 sm:col-span-2">
+                            {{.Task.ErrorMessage}}
+                        </dd>
+                    </div>
+                    {{end}}
+                    <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt class="text-sm font-medium text-gray-500">
+                            Timestamps
+                        </dt>
+                        <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            <div>Created: {{.Task.CreatedAt}}</div>
+                            <div>Updated: {{.Task.UpdatedAt}}</div>
+                            {{if .Task.SolvedAt}}
+                            <div>Solved: {{.Task.SolvedAt}}</div>
+                            {{end}}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        alert('Token copied to clipboard!');
+    }).catch(function(err) {
+        console.error('Failed to copy text: ', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            alert('Token copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
+        document.body.removeChild(textArea);
+    });
+}
+</script>
+{{end}}

@@ -18,5 +18,10 @@ type CaptchaTask struct {
 	SiteKey         string  `json:"sitekey"`
 	TargetURL       string  `json:"target_url"`
 	CaptchaResponse *string `json:"captcha_response,omitempty"`
+	Status          string  `json:"status"`
+	ErrorMessage    *string `json:"error_message,omitempty"`
+	Attempts        int     `json:"attempts"`
 	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+	SolvedAt        *string `json:"solved_at,omitempty"`
 }
