@@ -52,7 +52,7 @@ async fn main() {
 }
 
 async fn run_auth_mode() {
-    eprintln!("🔐 Авторизация");
+    eprintln!("🔐 Auth mode");
 
     let stdin = io::stdin();
     let mut lines = BufReader::new(stdin).lines();
@@ -67,7 +67,7 @@ async fn run_auth_mode() {
         return;
     };
 
-    eprintln!("🌐 Подключение к WebSocket...");
+    eprintln!("🌐 Connecting to WebSocket...");
     let (ws_stream, _) = match connect_async("ws://127.0.0.1:8080/socket").await {
         Ok(pair) => pair,
         Err(e) => {
