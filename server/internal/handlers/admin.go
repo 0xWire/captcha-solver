@@ -12,9 +12,17 @@ import (
 )
 
 func ShowAdminDashboard(c *fiber.Ctx) error {
+	// Get total users count
+	var totalUsers int
+	err := config.DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&totalUsers)
+	if err != nil {
+		return c.Status(500).SendString("Error getting users count")
+	}
+
 	return c.Render("admin/dashboard", fiber.Map{
-		"Title": "Admin Dashboard",
-		"User":  c.Locals("user").(*models.User),
+		"Title":      "Admin Dashboard",
+		"User":       c.Locals("user").(*models.User),
+		"TotalUsers": totalUsers,
 	}, "layout")
 }
 

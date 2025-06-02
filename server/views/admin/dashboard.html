@@ -12,8 +12,9 @@
     </div>
     <div>
         <h2 class="text-2xl font-bold text-gray-800 mb-2">System Stats</h2>
-        <!-- You can add additional statistics or recent activity here -->
-        <p class="text-gray-700">Total Users: <!-- Place holder for dynamic count --></p>
+        <div class="bg-gray-50 rounded-lg p-4">
+            <p class="text-gray-700">Total Users: <span class="font-semibold">{{.TotalUsers}}</span></p>
+        </div>
     </div>
 </div>
 {{end}}
