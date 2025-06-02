@@ -5,10 +5,11 @@ import (
 	"captcha-solver/internal/models"
 	"captcha-solver/internal/utils"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"time"
+
 	"github.com/gofiber/fiber/v2"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -58,6 +59,9 @@ func HandleLogin(c *fiber.Ctx) error {
 	if balance.Valid {
 		user.Balance = balance.Float64
 	}
+
+	log.Printf("Login attempt for user: %s, API Key: %s, Balance: %.2f",
+		user.Username, user.APIKey, user.Balance)
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		log.Printf("Password mismatch for %s", username)

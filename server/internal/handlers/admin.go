@@ -5,24 +5,23 @@ import (
 	"captcha-solver/internal/models"
 	"captcha-solver/internal/utils"
 	"fmt"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
-	"time"
 )
 
-// Панель администратора
 func ShowAdminDashboard(c *fiber.Ctx) error {
 	return c.Render("admin/dashboard", fiber.Map{
-		"Title": "Панель администратора",
+		"Title": "Admin Dashboard",
 		"User":  c.Locals("user").(*models.User),
 	}, "layout")
 }
 
-// Список пользователей для администратора
-func ShowUsers(c *fiber.Ctx) error {
+func ShowUsersAdmin(c *fiber.Ctx) error {
 	rows, err := config.DB.Query("SELECT id, username, role, api_key, created_at FROM users")
 	if err != nil {
-		return c.Status(500).SendString("Ошибка получения пользователей")
+		return c.Status(500).SendString("Error getting users")
 	}
 	defer rows.Close()
 
@@ -35,7 +34,7 @@ func ShowUsers(c *fiber.Ctx) error {
 		userList = append(userList, &user)
 	}
 	return c.Render("admin/users", fiber.Map{
-		"Title": "Управление пользователями",
+		"Title": "Manage Users",
 		"User":  c.Locals("user").(*models.User),
 		"Users": userList,
 	}, "layout")

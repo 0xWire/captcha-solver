@@ -4,11 +4,12 @@ import (
 	"captcha-solver/internal/config"
 	"captcha-solver/internal/models"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"strconv"
 	"strings"
+
 	"github.com/gofiber/fiber/v2"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // Root redirection based on role
@@ -51,7 +52,8 @@ func RootRedirect(app *fiber.App) {
 			user.Balance = balanceDB.Float64
 		}
 
-		log.Printf("Root redirect for user: %s with role: %s", user.Username, user.Role)
+		log.Printf("Root redirect for user: %s with role: %s, API Key: %s, Balance: %.2f",
+			user.Username, user.Role, user.APIKey, user.Balance)
 
 		switch strings.ToLower(user.Role) {
 		case "admin":
